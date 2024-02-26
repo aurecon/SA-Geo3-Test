@@ -34,11 +34,93 @@ jobs:
           dotnet run generate-schema ${HOME}/functionSchema.json --project function/function.csproj
           cat ${HOME}/functionSchema.json
 
-      - name: Speckle Automate Function - Build and Publish
-        uses: specklesystems/speckle-automate-github-composite-action@0.7.2
+      # Below is extracted from https://github.com/specklesystems/speckle-automate-github-composite-action/blob/main/action.yml
+      # - name: Speckle Automate Function - Build and Publish
+      #   uses: specklesystems/speckle-automate-github-composite-action@0.8.1
+      #   with:
+      #     speckle_function_command: "dotnet SA-Function.dll"
+      #     speckle_automate_url: https://automate.speckle.dev
+      #     speckle_token: ${{ secrets.SPECKLE_FUNCTION_TOKEN }}
+      #     speckle_function_id: ${{ secrets.SPECKLE_FUNCTION_ID }}
+      #     speckle_function_input_schema_file_path: functionSchema.json
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          if  [ -z "${{ secrets.speckle_function_token }}" ]; then
+            echo "ERROR: speckle_token secret is required"
+            exit 1
+          fi
+          if  [ -z "${{ secrets.speckle_function_id }}" ]; then
+            echo "ERROR: speckle_function_id input value is required"
+            exit 1
+          fi
+
+      - name: Set Version tag
+        shell: bash
+        run: |
+          echo "Determining Release tag value"
+
+          if [[ ${GITHUB_REF_TYPE} == "tag" ]]
+          then
+            echo "Workflow triggered by a git tag"
+            RELEASE_TAG=${GITHUB_REF_NAME}
+          else
+            echo "Workflow triggered on a git branch"
+            RELEASE_TAG=$(git rev-parse --short ${GITHUB_SHA})
+          fi
+
+          echo "Setting the function's releaseTag to: ${RELEASE_TAG}"
+          echo "releaseTag=${RELEASE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx # required to enable caching of docker build
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Speckle Automate Docker registry
+        uses: docker/login-action@v3.0.0
         with:
-          speckle_function_command: "dotnet SA-Function.dll"
+          registry: https://automate.speckle.dev
+          username: ${{ secrets.speckle_function_token }}
+          password: ${{ secrets.speckle_function_token }}
+
+      - name: Parse automate host
+        shell: bash
+        run: |
+          AUTOMATE_HOST=$(python -c 'from urllib.parse import urlparse; print(urlparse("https://automate.speckle.dev").netloc)')
+          echo "Parsed automate host: ${AUTOMATE_HOST}"
+          echo "automateHost=${AUTOMATE_HOST}" >>"$GITHUB_ENV"
+
+      - name: Ensure image doesn't exist in registry
+        shell: bash
+        run: |
+          set +e
+          docker manifest inspect ${{ env.automateHost }}/${{ secrets.speckle_function_id }}:${{ env.releaseTag }}
+          if [[ $? == 0 ]]
+          then
+            echo "Cannot override the existing release tag ${{ env.releaseTag }}. Please publish a new release!"
+            exit 1
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5.1.0
+        with:
+          context: .
+          file: ./Dockerfile
+          tags: ${{ env.automateHost }}/${{ secrets.speckle_function_id }}:${{ env.releaseTag }}
+          target: ""
+          push: true
+          cache-from: type=registry,ref=${{ env.automateHost }}/${{ secrets.speckle_function_id }}:buildcache
+          cache-to: type=registry,ref=${{ env.automateHost }}/${{ secrets.speckle_function_id }}:buildcache,mode=max
+          build-args: |
+            DEPLOY_USERNAME=${{ secrets.NUGET_USERNAME }}
+            DEPLOY_PASSWORD=${{ secrets.NUGET_PASSWORD }}
+
+      - name: Speckle Automate function version publisher
+        uses: specklesystems/speckle-automate-github-action@0.9.1
+        id: register_speckle_function_version
+        with:
           speckle_automate_url: https://automate.speckle.dev
-          speckle_token: ${{ secrets.SPECKLE_FUNCTION_TOKEN }}
-          speckle_function_id: ${{ secrets.SPECKLE_FUNCTION_ID }}
+          speckle_token: ${{ secrets.speckle_function_token }}
+          speckle_function_id: ${{ secrets.speckle_function_id }}
           speckle_function_input_schema_file_path: functionSchema.json
+          speckle_function_release_tag: ${{ env.releaseTag }}
+          speckle_function_command: dotnet function.dll

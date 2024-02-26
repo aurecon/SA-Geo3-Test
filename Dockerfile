@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 as build-env
 
-ARG NUGET_USERNAME
-ARG NUGET_PASSWORD
+ARG DEPLOY_USERNAME
+ARG DEPLOY_PASSWORD
 
 RUN dotnet nuget add source "https://gitlab.aurecongroup.com/api/v4/projects/714/packages/nuget/index.json" --name "Aurecon Package Manager" --username $DEPLOY_USERNAME --password $DEPLOY_PASSWORD --store-password-in-clear-text
 
