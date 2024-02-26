@@ -35,7 +35,7 @@ jobs:
           cat ${HOME}/functionSchema.json
 
       - name: Speckle Automate Function - Build and Publish
-        uses: specklesystems/speckle-automate-github-composite-action@0.7.2
+        uses: specklesystems/speckle-automate-github-composite-action@0.8.1
         with:
           speckle_function_command: "dotnet SA-Function.dll"
           speckle_automate_url: https://automate.speckle.dev
