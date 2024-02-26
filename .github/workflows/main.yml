@@ -31,7 +31,7 @@ jobs:
       - name: Extract functionInputSchema
         id: extract_schema
         run: |
-          dotnet run generate-schema ${HOME}/functionSchema.json
+          dotnet run generate-schema ${HOME}/functionSchema.json --project function/function.csproj
           cat ${HOME}/functionSchema.json
 
       - name: Speckle Automate Function - Build and Publish
