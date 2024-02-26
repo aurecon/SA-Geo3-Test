@@ -1,8 +1,0 @@
-{
-  "recommendations": [
-    "csharpier.csharpier-vscode",
-    "ms-dotnettools.csharp",
-    "ms-dotnettools.csdevkit",
-    "ms-azuretools.vscode-docker"
-  ]
-}
